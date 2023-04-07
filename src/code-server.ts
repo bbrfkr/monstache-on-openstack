@@ -7,6 +7,7 @@ export class CodeServerStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
 
+    const serverConfig = scope.node.tryGetContext("serverConfig")
 
     // define resources here
     getOpenstackProvider(this);
@@ -39,11 +40,12 @@ export class CodeServerStack extends TerraformStack {
       dpkg -i code-server_4.5.0_amd64.deb
       systemctl enable --now code-server@root
 
-      # dependencies for pyenv
+      # dependencies for pyenv, rbenv
       apt-get -y install make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+      apt-get -y install autoconf bison patch build-essential rustc libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libgmp-dev libncurses5-dev libffi-dev libgdbm6 libgdbm-dev libdb-dev uuid-dev
 
       # install nvidia driver
-      apt -y install nvidia-driver-515
+      apt -y install nvidia-driver-525
 
       # install nvidia container driver
       curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | apt-key add -
@@ -61,6 +63,10 @@ export class CodeServerStack extends TerraformStack {
       apt install google-chrome-stable
 
       # mount volume
+      lsblk -f /dev/vdb | grep ext4 > /dev/null
+      if [ $? -ne 0 ] ; then
+          mkfs -t ext4 /dev/vdb
+      fi
       echo '/dev/vdb /root ext4 defaults 0 0' >> /etc/fstab
 
       # reboot host
@@ -68,28 +74,29 @@ export class CodeServerStack extends TerraformStack {
     `;
 
     new ComputeInstanceV2(this, 'CodeServer', {
-      name: 'code-server',
-      imageName: 'ubuntu-2204',
-      flavorName: 'p1.xlarge',
-      keyPair: 'bbrfkr',
-      securityGroups: ['allow-all'],
-      network: [{ name: 'public' }],
+      name: serverConfig.serverName,
+      imageId: serverConfig.imageUuid,
+      flavorName: serverConfig.flavorName,
+      keyPair: serverConfig.keyPairName,
+      securityGroups: serverConfig.securityGroupNames,
+      network: [{ name: serverConfig.bootNetworkName }],
       userData: userData,
       blockDevice: [
         {
-          uuid: "a51939c7-256f-44e1-9ce6-e67f3d9b3d71",
+          uuid: serverConfig.imageUuid,
           sourceType: "image",
-          destinationType: "local",
+          destinationType: "volume",
+          volumeSize: serverConfig.bootVolumeSize,
           bootIndex: 0,
           deleteOnTermination: true,
         },
         {
-          uuid: "21f06215-6dc4-41fe-9144-af7b4cde8173",
+          uuid: serverConfig.dataVolumeUuid,
           sourceType: "volume",
           destinationType: "volume",
           bootIndex: 1,
           deleteOnTermination: false,
-        }
+        },
       ]
     });
   }
