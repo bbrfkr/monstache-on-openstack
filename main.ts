@@ -1,6 +1,6 @@
 import { App } from "cdktf";
-import { CodeServerStack } from "./src/code-server";
+import { MonstacheStack } from "./src/monstache";
 
 const app = new App();
-new CodeServerStack(app, "code-server-on-openstack");
+new MonstacheStack(app, "monstache-on-openstack");
 app.synth();
